@@ -92,7 +92,8 @@ class Bridge:
             "model": model,
             "messages": api_messages,
             "temperature": 0.7,
-            "max_tokens": 4096,
+            "max_tokens": 16384,
+            "thinking": {"type": "disabled"},
         }
 
         if tools:
@@ -137,6 +138,9 @@ class Bridge:
         message = choice.get("message", {})
 
         content = message.get("content", "") or ""
+        # 思考模型：content为空时从reasoning_content取
+        if not content:
+            content = message.get("reasoning_content", "") or ""
 
         # 解析tool_calls
         tool_calls = []
