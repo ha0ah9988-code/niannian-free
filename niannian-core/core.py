@@ -35,10 +35,28 @@ DATA_DIR = CORE_DIR.parent / "niannian-data"
 SESSION_DIR = DATA_DIR / "niannian-session"
 SESSION_FILE = SESSION_DIR / "session.json"
 
-# ── Hermes 寄生路径（如果安装了Hermes） ─────────────────
-HERMES_AGENT_DIR = Path("/home/niannian/.hermes/hermes-agent")
-HERMES_TOOLS_DIR = HERMES_AGENT_DIR / "tools"
-_HERMES_AVAILABLE = HERMES_AGENT_DIR.exists()
+# ── Hermes 寄生路径（自动检测，支持VPS/Termux） ──────────
+def _detect_hermes() -> Path | None:
+    """自动检测Hermes安装位置。按优先级尝试。"""
+    candidates = [
+        # 环境变量
+        os.environ.get("HERMES_AGENT_DIR", ""),
+        os.environ.get("HERMES_HOME", ""),
+        # 常见位置
+        os.path.expanduser("~/.hermes/hermes-agent"),
+        os.path.expanduser("~/hermes/hermes-agent"),
+        # Termux典型位置
+        "/data/data/com.termux/files/home/.hermes/hermes-agent",
+        "/data/data/com.termux/files/home/hermes/hermes-agent",
+    ]
+    for c in candidates:
+        if c and Path(c).is_dir():
+            return Path(c)
+    return None
+
+HERMES_AGENT_DIR = _detect_hermes()
+HERMES_TOOLS_DIR = HERMES_AGENT_DIR / "tools" if HERMES_AGENT_DIR else None
+_HERMES_AVAILABLE = HERMES_AGENT_DIR is not None
 
 # 添加tools-internal和niannian-base到路径
 sys.path.insert(0, str(TOOLS_INTERNAL_DIR))

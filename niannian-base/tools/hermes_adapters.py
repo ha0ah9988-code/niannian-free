@@ -9,10 +9,26 @@ hermes_adapters.py — Hermes工具适配器
 
 import importlib.util as _iu
 import json as _json
+import os as _os
 from pathlib import Path as _Path
 
-_HERMES_TOOLS = _Path("/home/niannian/.hermes/hermes-agent/tools")
-_HERMES_OK = _HERMES_TOOLS.exists()
+# ── Hermes工具目录（自动检测，支持VPS/Termux） ──────────
+_HERMES_TOOLS = None
+_HERMES_OK = False
+for _cand in [
+    _os.environ.get("HERMES_AGENT_DIR", ""),
+    _os.environ.get("HERMES_HOME", ""),
+    _os.path.expanduser("~/.hermes/hermes-agent"),
+    _os.path.expanduser("~/hermes/hermes-agent"),
+    "/data/data/com.termux/files/home/.hermes/hermes-agent",
+    "/data/data/com.termux/files/home/hermes/hermes-agent",
+]:
+    if _cand:
+        _p = _Path(_cand) / "tools"
+        if _p.is_dir():
+            _HERMES_TOOLS = _p
+            _HERMES_OK = True
+            break
 
 _web = _term = _cron = _send = _mem = _skills = _delegate = _todo = _image = _tts = _vision = _xsearch = None
 
