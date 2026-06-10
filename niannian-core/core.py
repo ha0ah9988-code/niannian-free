@@ -387,7 +387,7 @@ def _llm_loop(
     tools: dict,
     identity: Identity,
     session: list,
-    max_rounds: int = 3,
+    max_rounds: int = 10,
 ) -> str:
     """LLM工具闭环：调用LLM→解析tool_call→执行→喂回→重复。"""
     context = identity.get_system_context()
