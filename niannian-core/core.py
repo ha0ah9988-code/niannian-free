@@ -442,7 +442,11 @@ def _llm_loop(
                 continue
 
         # 没有tool call → 返回LLM的文本
-        return result.get("content", "") or "（LLM无响应）"
+        content = result.get("content", "")
+        error = result.get("error", "")
+        if error and not content:
+            return f"❌ {error}"
+        return content or "（LLM无响应）"
 
     return "⚠ 达到最大工具调用轮数。"
 

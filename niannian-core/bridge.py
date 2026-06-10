@@ -115,14 +115,15 @@ class Bridge:
 
         # 发送请求
         url = f"{base_url.rstrip('/')}/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "niannian-origin/0.2",
+        }
         req = urllib.request.Request(
             url,
             data=json.dumps(body).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-                "User-Agent": "niannian-origin/0.2",
-            },
+            headers=headers,
             method="POST",
         )
 
@@ -133,9 +134,15 @@ class Bridge:
             error_body = e.read().decode("utf-8", errors="replace")
             return {"error": f"LLM API错误 {e.code}: {error_body[:500]}"}
         except urllib.error.URLError as e:
-            return {"error": f"LLM连接失败: {e.reason}"}
+            return {"error": f"LLM连接失败 ({base_url[:40]}): {e.reason}"}
         except Exception as e:
             return {"error": f"LLM调用异常: {e}"}
+
+        # 检查API返回的错误
+        if "error" in data:
+            err = data["error"]
+            msg = err.get("message", str(err))
+            return {"error": f"LLM API错误: {msg}", "content": msg}
 
         # 解析响应
         choice = data.get("choices", [{}])[0]
@@ -145,6 +152,11 @@ class Bridge:
         # 思考模型：content为空时从reasoning_content取
         if not content:
             content = message.get("reasoning_content", "") or ""
+
+        # 如果还是空，返回原始响应用于调试
+        if not content:
+            finish = choice.get("finish_reason", "unknown")
+            return {"error": f"LLM返回空 (finish={finish})", "content": "", "raw": json.dumps(data, ensure_ascii=False)[:300]}
 
         # 解析tool_calls
         tool_calls = []
