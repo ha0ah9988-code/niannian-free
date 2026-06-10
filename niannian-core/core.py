@@ -194,10 +194,22 @@ def _load_session() -> list:
 
 def _save_session(messages: list) -> None:
     """保存会话，最多保留20条。"""
+    import re as _re
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
-    messages = messages[-20:]  # 只保留最近20条
+    messages = messages[-20:]
+
+    # 清理surrogate字符（Termux Python 3.13 stricter JSON）
+    def _clean(obj):
+        if isinstance(obj, str):
+            return _re.sub(r'[\ud800-\udfff]', '?', obj)
+        if isinstance(obj, dict):
+            return {k: _clean(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_clean(v) for v in obj]
+        return obj
+
     with open(SESSION_FILE, "w") as f:
-        json.dump(messages, f, indent=2, ensure_ascii=False)
+        json.dump(_clean(messages), f, indent=2, ensure_ascii=False)
 
 
 # ── 内置命令 ────────────────────────────────────────────
@@ -379,20 +391,30 @@ def _llm_loop(
 ) -> str:
     """LLM工具闭环：调用LLM→解析tool_call→执行→喂回→重复。"""
     context = identity.get_system_context()
-    messages = [{"role": "user", "content": text}]
-    tool_defs = [
-        {
-            "name": "terminal",
-            "description": "执行shell命令。输入完整命令字符串。安全黑名单包括 rm -rf /, mkfs, dd if= 等。",
+
+    # 暴露所有工具给LLM
+    tool_defs = []
+    for cmd, mod in tools.items():
+        desc = f'{cmd}工具——执行相关操作。输入参数文本。'
+        if cmd in ('终端', 'terminal'):
+            desc = '执行shell命令。输入完整命令字符串。安全黑名单包括 rm -rf /, mkfs, dd if= 等。'
+        elif cmd == '搜索':
+            desc = '搜索网页。输入搜索关键词。'
+        elif cmd == '浏览':
+            desc = '浏览器操作。子命令: navigate/snapshot/click/scroll/type/back/press/console/images/vision'
+        tool_defs.append({
+            "name": cmd,
+            "description": desc,
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "要执行的shell命令"}
+                    "text": {"type": "string", "description": f"传递给{cmd}工具的参数"}
                 },
-                "required": ["command"],
+                "required": ["text"],
             },
-        }
-    ]
+        })
+
+    messages = [{"role": "user", "content": text}]
 
     for round_num in range(max_rounds):
         try:
@@ -402,23 +424,25 @@ def _llm_loop(
 
         # 检查是否有tool call
         if result.get("tool_calls"):
-            # 处理第一个tool call
             tc = result["tool_calls"][0]
-            if tc["name"] == "terminal" and "terminal" in tools:
-                raw = tc.get("arguments", {}).get("command", "")
-                tool_result = tools["terminal"].handle(raw)
-                # 解析terminal返回的JSON，取output字段
+            tool_name = tc.get("name", "")
+            if tool_name in tools:
+                raw = tc.get("arguments", {}).get("text", "") or tc.get("arguments", {}).get("command", "")
                 try:
-                    tr = json.loads(tool_result)
-                    tool_output = tr.get("output", tool_result)
-                except (json.JSONDecodeError, TypeError):
-                    tool_output = tool_result
-                messages.append({"role": "assistant", "content": f"[调用了终端: {raw}]"})
-                messages.append({"role": "user", "content": f"终端输出:\n{tool_output}\n\n继续。"})
+                    tool_result = tools[tool_name].handle(raw)
+                    try:
+                        tr = json.loads(tool_result)
+                        tool_output = tr.get("output", tool_result)
+                    except (json.JSONDecodeError, TypeError):
+                        tool_output = tool_result
+                except Exception as e:
+                    tool_output = f"工具执行失败: {e}"
+                messages.append({"role": "assistant", "content": f"[调用{tool_name}: {raw[:100]}]"})
+                messages.append({"role": "user", "content": f"{tool_name}输出:\n{tool_output}\n\n继续。"})
                 continue
 
         # 没有tool call → 返回LLM的文本
-        return result.get("content", "（LLM无响应）")
+        return result.get("content", "") or "（LLM无响应）"
 
     return "⚠ 达到最大工具调用轮数。"
 
