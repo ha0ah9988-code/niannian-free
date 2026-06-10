@@ -92,8 +92,7 @@ class Bridge:
             "model": model,
             "messages": api_messages,
             "temperature": 0.7,
-            "max_tokens": 16384,
-            "thinking": {"type": "disabled"},
+            "max_tokens": 65536,
         }
 
         if tools:
