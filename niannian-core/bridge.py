@@ -73,7 +73,7 @@ class Bridge:
         api_key = llm.get("api_key", "")
 
         # opencode-go: 自动检测本地代理或云API
-        if provider.lower() in ("opencode", "opencode-go", "opencode_go", "zen"):
+        if any(kw in provider.lower() for kw in ("opencode", "zen")):
             if _is_port_open("127.0.0.1", 30000):
                 base_url = "http://127.0.0.1:30000/v1"
             elif not base_url:
@@ -94,7 +94,7 @@ class Bridge:
         }
 
         # opencode-go: deepseek思考模型开启thinking
-        if provider.lower() in ("opencode", "opencode-go", "opencode_go", "zen"):
+        if any(kw in provider.lower() for kw in ("opencode", "zen")):
             _model_lower = model.lower()
             if any(kw in _model_lower for kw in ("deepseek-v", "deepseek-reasoner")):
                 if not _model_lower.startswith("deepseek-v3"):
