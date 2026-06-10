@@ -49,7 +49,8 @@ class Bridge:
         return {}
 
     def has_llm(self) -> bool:
-        """检查LLM是否已配置。"""
+        """检查LLM是否已配置（每次从文件读取，支持运行时更新）。"""
+        self.config = self._load_config()  # 实时重读
         llm = self.config.get("llm", {})
         return bool(llm.get("api_key"))
 
