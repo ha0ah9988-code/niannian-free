@@ -392,18 +392,39 @@ def _llm_loop(
     """LLM工具闭环：调用LLM→解析tool_call→执行→喂回→重复。"""
     context = identity.get_system_context()
 
-    # 暴露所有工具给LLM
+    # 暴露所有工具给LLM——中文名转ASCII（DeepSeek API限制）
+    _name_map = {}  # ascii_name → chinese_cmd
     tool_defs = []
     for cmd, mod in tools.items():
+        ascii_name = cmd
+        if cmd == '终端': ascii_name = 'terminal'
+        elif cmd == '搜索': ascii_name = 'search'
+        elif cmd == '提取': ascii_name = 'extract'
+        elif cmd == '浏览': ascii_name = 'browse'
+        elif cmd == '防爬': ascii_name = 'antibot'
+        elif cmd == '定时': ascii_name = 'cron'
+        elif cmd == '记忆': ascii_name = 'memory'
+        elif cmd == '技能': ascii_name = 'skills'
+        elif cmd == '待办': ascii_name = 'todo'
+        elif cmd == '画图': ascii_name = 'image'
+        elif cmd == '发送': ascii_name = 'send'
+        elif cmd == '委托': ascii_name = 'delegate'
+        elif cmd == '语音': ascii_name = 'tts'
+        elif cmd == '视觉': ascii_name = 'vision'
+        elif cmd == '推搜': ascii_name = 'xsearch'
+
+        _name_map[ascii_name] = cmd
+
         desc = f'{cmd}工具——执行相关操作。输入参数文本。'
         if cmd in ('终端', 'terminal'):
-            desc = '执行shell命令。输入完整命令字符串。安全黑名单包括 rm -rf /, mkfs, dd if= 等。'
+            desc = '终端——执行shell命令。输入完整命令字符串。安全黑名单包括 rm -rf /, mkfs, dd if= 等。'
         elif cmd == '搜索':
-            desc = '搜索网页。输入搜索关键词。'
+            desc = '搜索——搜索网页获取最新信息。输入搜索关键词。'
         elif cmd == '浏览':
-            desc = '浏览器操作。子命令: navigate/snapshot/click/scroll/type/back/press/console/images/vision'
+            desc = '浏览——浏览器操作。子命令: navigate/snapshot/click/scroll/type/back/press/console/images/vision'
+
         tool_defs.append({
-            "name": cmd,
+            "name": ascii_name,
             "description": desc,
             "parameters": {
                 "type": "object",
@@ -426,10 +447,12 @@ def _llm_loop(
         if result.get("tool_calls"):
             tc = result["tool_calls"][0]
             tool_name = tc.get("name", "")
-            if tool_name in tools:
+            # ASCII名映射回中文命令
+            actual_cmd = _name_map.get(tool_name, tool_name)
+            if actual_cmd in tools:
                 raw = tc.get("arguments", {}).get("text", "") or tc.get("arguments", {}).get("command", "")
                 try:
-                    tool_result = tools[tool_name].handle(raw)
+                    tool_result = tools[actual_cmd].handle(raw)
                     try:
                         tr = json.loads(tool_result)
                         tool_output = tr.get("output", tool_result)
